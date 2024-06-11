@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"math/rand"
 )
@@ -8,6 +9,7 @@ import (
 type ExampleCollector struct {
 	randomFloatMetric  *prometheus.Desc
 	randomStringMetric *prometheus.Desc
+	logger             log.Logger
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -20,7 +22,7 @@ func getRandomString(n int) string {
 	return string(b)
 }
 
-func NewExampleCollector() *ExampleCollector {
+func NewExampleCollector(logger log.Logger) Collector {
 	//return &ExampleCollector{
 	//	randomFloatMetric:  rand.Float32(),
 	//	randomStringMetric: getRandomString(rand.Intn(10)),
@@ -28,7 +30,12 @@ func NewExampleCollector() *ExampleCollector {
 	return &ExampleCollector{
 		randomFloatMetric:  prometheus.NewDesc("random_float_metric", "example metric", nil, nil),
 		randomStringMetric: prometheus.NewDesc("random_string_metric", "example metric", nil, nil),
+		logger:             logger,
 	}
+}
+
+func init() {
+	registerCollector("example", NewExampleCollector)
 }
 
 func (c *ExampleCollector) Describe(ch chan<- *prometheus.Desc) {
