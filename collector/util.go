@@ -16,6 +16,10 @@ import (
 - 一个init函数，用于注册collector
 */
 
+/* lustre exporter */
+
+/* collector */
+
 var (
 	collectors    []string
 	factories     map[string]func(logger log.Logger) Collector
