@@ -1,33 +1,31 @@
 package collector
 
 import (
+	"github.com/go-kit/log"
+	"github.com/prometheus/client_golang/prometheus"
 	"math/rand"
-	"time"
 )
 
-type ExampleMetrics struct {
-	randomFloat  float32
-	randomString string
+type ExampleCollector struct {
+	randomFloatMetric *prometheus.Desc
+	logger            log.Logger
 }
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-func getRandomString(n int) string {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+func NewExampleCollector(logger log.Logger) Collector {
+	return &ExampleCollector{
+		randomFloatMetric: prometheus.NewDesc("random_float_metric", "example metric", nil, nil),
+		logger:            logger,
 	}
-	return string(b)
 }
 
-func exportMetric() map[string]any {
-	var exampleMetric ExampleMetrics
-	rand.Seed(time.Now().UnixMilli())
-	exampleMetric.randomFloat = rand.Float32()
-	exampleMetric.randomString = getRandomString(rand.Intn(10))
+func init() {
+	registerCollector("example", NewExampleCollector)
+}
 
-	return map[string]any{
-		"RandomFloat":  exampleMetric.randomFloat,
-		"RandomString": exampleMetric.randomString,
-	}
+func (c *ExampleCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- c.randomFloatMetric
+}
+
+func (c *ExampleCollector) Collect(ch chan<- prometheus.Metric) {
+	ch <- prometheus.MustNewConstMetric(c.randomFloatMetric, prometheus.GaugeValue, rand.Float64())
 }
