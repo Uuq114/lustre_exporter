@@ -78,6 +78,10 @@ type Collector interface {
 
 /* utils */
 
+const (
+	namespace = "Lustre"
+)
+
 func registerCollector(name string, factory func(logger log.Logger) Collector) {
 	collectors = append(collectors, name)
 	factoriesLock.Lock()
