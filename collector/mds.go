@@ -3,6 +3,11 @@ package collector
 import (
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
+	"os/exec"
+)
+
+const (
+	GetMDTUsageCommand = "lctl get_param osd-*.*MDT*.kbytestotal"
 )
 
 type MDSSpaceCollector struct {
@@ -50,9 +55,38 @@ func (mc *MDSSpaceCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (mc *MDSSpaceCollector) Collect(ch chan<- prometheus.Metric) {
+	output, err := getMDTInfo()
+	if err != nil {
+		mc.logger.Log("error", err.Error())
+	}
+	metric := parseMDTInfo(output)
 
+	for mdt, mdtMetric := range metric.MDTList {
+		ch <- prometheus.MustNewConstMetric(mc.KBFree, prometheus.GaugeValue, float64(mdtMetric.KBFree), mdt)
+		ch <- prometheus.MustNewConstMetric(mc.KBTotal, prometheus.GaugeValue, float64(mdtMetric.KBTotal), mdt)
+		ch <- prometheus.MustNewConstMetric(mc.InodesFree, prometheus.GaugeValue, float64(mdtMetric.InodesFree), mdt)
+		ch <- prometheus.MustNewConstMetric(mc.InodesTotal, prometheus.GaugeValue, float64(mdtMetric.InodesTotal), mdt)
+	}
 }
 
 func getMDTInfo() (string, error) {
+	output, err := execCommand(GetMDTUsageCommand)
+	if err != nil {
 
+	}
+}
+
+func parseMDTInfo(output string) MDSSpaceMetric {
+
+}
+
+func execCommand(command string) (string, error) {
+	cmd := exec.Command("/bin/bash", "-c", command)
+
+	stdout, err := cmd.Output()
+	if err != nil {
+		return "", err
+	} else {
+		return string(stdout), nil
+	}
 }

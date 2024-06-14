@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"fmt"
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/promlog"
@@ -87,4 +88,12 @@ func registerCollector(name string, factory func(logger log.Logger) Collector) {
 	factoriesLock.Lock()
 	defer factoriesLock.Unlock()
 	factories[name] = factory
+}
+
+type ExecTimeoutError struct {
+	Message string
+}
+
+func (e *ExecTimeoutError) Error() string {
+	return fmt.Sprintf("Message: %s", e.Message)
 }
