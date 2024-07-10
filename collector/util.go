@@ -97,3 +97,26 @@ type ExecTimeoutError struct {
 func (e *ExecTimeoutError) Error() string {
 	return fmt.Sprintf("Message: %s", e.Message)
 }
+
+/* utils for test file */
+
+type MockedExecCommandTimeoutError struct {
+	Command string
+	Message string
+}
+
+func (e MockedExecCommandTimeoutError) Error() string {
+	return fmt.Sprintf("command: %s, message: %s", e.Command, e.Message)
+}
+
+func MockExecCommandTimeoutError(command string, message string) MockedExecCommandTimeoutError {
+	return MockedExecCommandTimeoutError{Command: command, Message: message}
+}
+
+func FakeExecCommand(command string, mockedOutput string, timeout bool) (string, error) {
+	if timeout {
+		return "", MockExecCommandTimeoutError(command, "mock timeout")
+	} else {
+		return mockedOutput, nil
+	}
+}

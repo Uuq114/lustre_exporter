@@ -4,10 +4,17 @@ import (
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"os/exec"
+	"strconv"
+	"strings"
 )
 
 const (
-	GetMDTUsageCommand = "lctl get_param osd-*.*MDT*.kbytestotal"
+	MDTTotalSpaceCommand = "lctl get_param osd-*.*MDT*.kbytestotal"
+)
+
+// All MDS metrics goes here
+var (
+	mdsMetric MDSSpaceMetric
 )
 
 type MDSSpaceCollector struct {
@@ -45,6 +52,7 @@ func NewMDSSpaceCollector(logger log.Logger) Collector {
 
 func init() {
 	registerCollector("mds", NewMDSSpaceCollector)
+	mdsMetric.MDTList = make(map[string]MDTMetric)
 }
 
 func (mc *MDSSpaceCollector) Describe(ch chan<- *prometheus.Desc) {
@@ -55,13 +63,15 @@ func (mc *MDSSpaceCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (mc *MDSSpaceCollector) Collect(ch chan<- prometheus.Metric) {
-	output, err := getMDTInfo()
+	// execute some commands, parse as metric type
+	output, err := execCommand(MDTTotalSpaceCommand)
 	if err != nil {
 		mc.logger.Log("error", err.Error())
 	}
-	metric := parseMDTInfo(output)
+	parseMDTInfo(output)
 
-	for mdt, mdtMetric := range metric.MDTList {
+	// export parsed data
+	for mdt, mdtMetric := range mdsMetric.MDTList {
 		ch <- prometheus.MustNewConstMetric(mc.KBFree, prometheus.GaugeValue, float64(mdtMetric.KBFree), mdt)
 		ch <- prometheus.MustNewConstMetric(mc.KBTotal, prometheus.GaugeValue, float64(mdtMetric.KBTotal), mdt)
 		ch <- prometheus.MustNewConstMetric(mc.InodesFree, prometheus.GaugeValue, float64(mdtMetric.InodesFree), mdt)
@@ -69,15 +79,20 @@ func (mc *MDSSpaceCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func getMDTInfo() (string, error) {
-	output, err := execCommand(GetMDTUsageCommand)
-	if err != nil {
+// there may be multiple MDTs on one node, so return a map here
+func parseMDTInfo(output string) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for _, line := range lines {
+		words := strings.Split(line, "=")
+		mdtName := strings.Split(strings.Split(words[0], ".")[1], "-")[1]
+		kbTotal, _ := strconv.Atoi(words[1])
 
+		if mdt, ok := mdsMetric.MDTList[mdtName]; ok {
+			mdt.KBTotal = kbTotal
+		} else {
+			mdsMetric.MDTList[mdtName] = MDTMetric{KBTotal: kbTotal}
+		}
 	}
-}
-
-func parseMDTInfo(output string) MDSSpaceMetric {
-
 }
 
 func execCommand(command string) (string, error) {
