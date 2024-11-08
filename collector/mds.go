@@ -1,15 +1,21 @@
 package collector
 
 import (
-	"github.com/go-kit/log"
-	"github.com/prometheus/client_golang/prometheus"
+	"errors"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
+
+	"github.com/go-kit/log"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
 	MDTTotalSpaceCommand = "lctl get_param osd-*.*MDT*.kbytestotal"
+	MDTFreeSpaceCommand  = "lctl get_param osd-*.*MDT*.kbytesfree"
+	MDTTotalInodeCommand = "lctl get_param osd-*.*MDT*.filestotal"
+	MDTFreeInodeCommand  = "lctl get_param osd-*.*MDT*.filesfree"
 )
 
 // All MDS metrics goes here
@@ -30,10 +36,10 @@ type MDSSpaceMetric struct {
 }
 
 type MDTMetric struct {
-	KBFree      int
-	KBTotal     int
-	InodesFree  int
-	InodesTotal int
+	KBFree      int64
+	KBTotal     int64
+	InodesFree  int64
+	InodesTotal int64
 }
 
 func NewMDSSpaceCollector(logger log.Logger) Collector {
@@ -64,11 +70,14 @@ func (mc *MDSSpaceCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (mc *MDSSpaceCollector) Collect(ch chan<- prometheus.Metric) {
 	// execute some commands, parse as metric type
-	output, err := execCommand(MDTTotalSpaceCommand)
-	if err != nil {
-		mc.logger.Log("error", err.Error())
+	commands := []string{MDTTotalSpaceCommand, MDTFreeSpaceCommand}
+	for _, command := range commands {
+		output, err := execCommand(command)
+		if err != nil {
+			mc.logger.Log("error", err.Error())
+		}
+		parseMDTInfo(output)
 	}
-	parseMDTInfo(output)
 
 	// export parsed data
 	for mdt, mdtMetric := range mdsMetric.MDTList {
@@ -79,20 +88,51 @@ func (mc *MDSSpaceCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-// there may be multiple MDTs on one node, so return a map here
-func parseMDTInfo(output string) {
+// converse metric name to struct field, make parsing easier
+func mapMetricNameToField(name string) string {
+	mapping := map[string]string{
+		"kbytestotal": "KBTotal",
+		"kbytesfree":  "KBFree",
+		"filesfree":   "InodesFree",
+		"filestotal":  "InodesTotal",
+	}
+	if value, ok := mapping[name]; ok {
+		return value
+	} else {
+		return ""
+	}
+}
+
+// parse metrics into a global map
+func parseMDTInfo(output string) error {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	for _, line := range lines {
 		words := strings.Split(line, "=")
-		mdtName := strings.Split(strings.Split(words[0], ".")[1], "-")[1]
-		kbTotal, _ := strconv.Atoi(words[1])
+		mdtName := strings.Split(words[0], ".")[1]
+		metricName := strings.Split(words[0], ".")[2]
+		value, _ := strconv.ParseInt(words[1], 10, 64)
 
+		fieldName := mapMetricNameToField(metricName)
+		if fieldName == "" {
+			return errors.New("cannot map metric name to valid struct field")
+		}
 		if mdt, ok := mdsMetric.MDTList[mdtName]; ok {
-			mdt.KBTotal = kbTotal
+			MDTReflectValue := reflect.ValueOf(mdt).Elem()
+			field := MDTReflectValue.FieldByName(fieldName)
+			if field.IsValid() && field.CanSet() {
+				field.SetInt(value)
+			}
 		} else {
-			mdsMetric.MDTList[mdtName] = MDTMetric{KBTotal: kbTotal}
+			var mdt MDTMetric
+			MDTReflectValue := reflect.ValueOf(mdt).Elem()
+			field := MDTReflectValue.FieldByName(fieldName)
+			if field.IsValid() && field.CanSet() {
+				field.SetInt(value)
+			}
+			mdsMetric.MDTList[mdtName] = mdt
 		}
 	}
+	return nil
 }
 
 func execCommand(command string) (string, error) {

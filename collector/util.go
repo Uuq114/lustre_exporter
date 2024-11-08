@@ -2,12 +2,13 @@ package collector
 
 import (
 	"fmt"
+	"os"
+	"sync"
+
 	"github.com/go-kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/promlog"
 	"github.com/spf13/viper"
-	"os"
-	"sync"
 )
 
 /*

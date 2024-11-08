@@ -3,9 +3,13 @@ package collector
 import "testing"
 
 var (
-	MDTUsageCommandOutput = `
+	MDTTotalSpaceCommandOutput = `
 osd-ldiskfs.sjtu-MDT0000.kbytestotal=11714622144
 osd-ldiskfs.sjtu-MDT0001.kbytestotal=11714622144
+`
+	MDTFreeSpaceCommandOutput = `
+osd-ldiskfs.sjtu-MDT0000.kbytesfree=10401788800
+osd-ldiskfs.sjtu-MDT0001.kbytesfree=10758664440
 `
 )
 
@@ -23,13 +27,17 @@ func TestParseMDTInfo(t *testing.T) {
 	}
 	clear(mdsMetric.MDTList)
 	// test part
-	parseMDTInfo(MDTUsageCommandOutput)
+	err := parseMDTInfo(MDTTotalSpaceCommandOutput)
+	if err != nil {
+		t.Errorf("parseMDTInfo() throws error: %s", err.Error())
+		return
+	}
 	tests := []struct {
 		input    string
-		expected int
+		expected int64
 	}{
-		{"MDT0000", 11714622144},
-		{"MDT0001", 11714622144},
+		{"sjtu-MDT0000", 11714622144},
+		{"sjtu-MDT0001", 11714622144},
 	}
 	for _, tt := range tests {
 		if got := mdsMetric.MDTList[tt.input].KBTotal; got != tt.expected {
